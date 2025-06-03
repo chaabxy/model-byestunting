@@ -1,16 +1,14 @@
-const tf = require("@tensorflow/tfjs-node");
-const fs = require("fs");
-const path = require("path");
+import * as tf from "@tensorflow/tfjs-node";
+import { join } from "path";
 
 let model = null;
 
-// Load model sekali saja
 async function loadModel() {
   if (!model) {
     try {
-      const modelPath = path.join(process.cwd(), "tfjs_model", "model.json");
+      const modelPath = join(process.cwd(), "tfjs_model", "model.json");
       model = await tf.loadLayersModel(`file://${modelPath}`);
-      console.log("Model berhasil dimuat");
+      console.log("Model loaded successfully");
     } catch (error) {
       console.error("Error loading model:", error);
       throw error;
@@ -31,10 +29,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method tidak diizinkan",
-      message: "Gunakan POST method untuk prediksi",
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
@@ -42,42 +37,35 @@ export default async function handler(req, res) {
 
     if (!data || !Array.isArray(data)) {
       return res.status(400).json({
-        error: "Data tidak valid",
-        message: "Data harus berupa array angka",
+        error: 'Invalid input. Expected array of numbers in "data" field',
       });
     }
 
     // Load model
     const loadedModel = await loadModel();
 
-    // Konversi data ke tensor
+    // Convert input to tensor
     const inputTensor = tf.tensor2d([data]);
 
-    // Lakukan prediksi
+    // Make prediction
     const prediction = loadedModel.predict(inputTensor);
     const result = await prediction.data();
 
-    // Cleanup tensor
+    // Clean up tensors
     inputTensor.dispose();
     prediction.dispose();
 
-    // Interpretasi hasil prediksi
-    const probability = result[0];
-    const isStunting = probability > 0.5;
-
+    // Return prediction result
     res.status(200).json({
       success: true,
-      prediction: {
-        probability: probability,
-        isStunting: isStunting,
-        status: isStunting ? "Berisiko Stunting" : "Normal",
-        confidence: Math.max(probability, 1 - probability) * 100,
-      },
+      prediction: Array.from(result),
+      input: data,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error dalam prediksi:", error);
+    console.error("Prediction error:", error);
     res.status(500).json({
-      error: "Terjadi kesalahan server",
+      error: "Internal server error",
       message: error.message,
     });
   }
