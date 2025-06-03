@@ -2,7 +2,7 @@
 let tf = null;
 let model = null;
 
-// Statistik normalisasi dari training data (sesuai dengan yang ada di notebook)
+// Statistik normalisasi dari training data
 const FEATURE_STATS = {
   mean: [29.5, 12.8, 89.4, 0.5],
   std: [17.2, 4.1, 15.8, 0.5],
@@ -17,9 +17,7 @@ const LABEL_MAPPING = {
 
 async function initTensorFlow() {
   if (!tf) {
-    // Import TensorFlow.js
     tf = await import("@tensorflow/tfjs");
-    // Set backend ke CPU untuk konsistensi
     await tf.setBackend("cpu");
     await tf.ready();
   }
@@ -31,13 +29,48 @@ async function loadModel(baseUrl) {
     try {
       await initTensorFlow();
 
-      // URL model yang benar
-      const modelUrl = `${baseUrl}/tfjs_model/model.json`;
-      console.log("Loading model from:", modelUrl);
+      // Coba beberapa URL alternatif
+      const modelUrls = [
+        `${baseUrl}/tfjs_model/model.json`,
+        `/tfjs_model/model.json`,
+        `./tfjs_model/model.json`,
+      ];
 
-      // Load model dengan error handling yang lebih baik
-      model = await tf.loadLayersModel(modelUrl);
-      console.log("✅ Model berhasil dimuat dari:", modelUrl);
+      let lastError = null;
+
+      for (const modelUrl of modelUrls) {
+        try {
+          console.log("🔄 Mencoba memuat model dari:", modelUrl);
+
+          // Test akses ke URL terlebih dahulu
+          const response = await fetch(modelUrl, {
+            method: "HEAD",
+            headers: {
+              Accept: "application/json",
+            },
+          });
+
+          if (response.ok) {
+            console.log("✅ URL model dapat diakses:", modelUrl);
+            model = await tf.loadLayersModel(modelUrl);
+            console.log("✅ Model berhasil dimuat dari:", modelUrl);
+            return model;
+          } else {
+            console.log(
+              `❌ URL tidak dapat diakses (${response.status}):`,
+              modelUrl
+            );
+          }
+        } catch (error) {
+          console.log(`❌ Error dengan URL ${modelUrl}:`, error.message);
+          lastError = error;
+          continue;
+        }
+      }
+
+      throw new Error(
+        `Semua URL model gagal dimuat. Last error: ${lastError?.message}`
+      );
     } catch (error) {
       console.error("❌ Error loading model:", error);
       throw new Error(`Gagal memuat model ML: ${error.message}`);
@@ -47,7 +80,6 @@ async function loadModel(baseUrl) {
 }
 
 function normalizeInput(data) {
-  // Normalisasi sesuai dengan training data
   return data.map((value, index) => {
     return (value - FEATURE_STATS.mean[index]) / FEATURE_STATS.std[index];
   });
@@ -167,7 +199,7 @@ export default async function handler(req, res) {
     const prediction = mlModel.predict(inputTensor);
     const predictionData = await prediction.data();
 
-    // Cleanup tensors untuk mencegah memory leak
+    // Cleanup tensors
     inputTensor.dispose();
     prediction.dispose();
 
