@@ -37,17 +37,15 @@ export default async function handler(req, res) {
 
     if (!data || !Array.isArray(data)) {
       return res.status(400).json({
-        error: 'Invalid input. Expected array of numbers in "data" field',
+        error: "Invalid input. Expected array of numbers in data field.",
       });
     }
 
     // Load model
     const loadedModel = await loadModel();
 
-    // Convert input to tensor
-    const inputTensor = tf.tensor2d([data]);
-
     // Make prediction
+    const inputTensor = tf.tensor2d([data]);
     const prediction = loadedModel.predict(inputTensor);
     const result = await prediction.data();
 
@@ -55,7 +53,7 @@ export default async function handler(req, res) {
     inputTensor.dispose();
     prediction.dispose();
 
-    // Return prediction result
+    // Return prediction
     res.status(200).json({
       success: true,
       prediction: Array.from(result),
