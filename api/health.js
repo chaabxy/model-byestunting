@@ -6,8 +6,10 @@ export default function handler(req) {
   return new Response(
     JSON.stringify({
       status: "OK",
-      message: "API is healthy",
+      message: "Stunting Prediction API is healthy",
       timestamp: new Date().toISOString(),
+      version: "1.0.0",
+      runtime: "edge",
     }),
     {
       status: 200,

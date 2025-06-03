@@ -1,15 +1,25 @@
 {
   "name": "stunting-prediction-api",
   "version": "1.0.0",
-  "description": "API untuk prediksi stunting",
-  "main": "api/health.js",
+  "description": "API for stunting prediction using TensorFlow.js",
+  "main": "api/index.js",
+  "type": "module",
   "scripts": {
-    "build": "echo 'No build step required for serverless functions'"
-  },
-  "dependencies": {
-    "@tensorflow/tfjs-node": "^4.15.0"
+    "build": "echo 'No build step required for serverless functions'",
+    "start": "vercel dev"
   },
   "engines": {
     "node": "18.x"
-  }
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "keywords": [
+    "tensorflow",
+    "machine-learning",
+    "stunting",
+    "prediction",
+    "api"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
 }
