@@ -9,10 +9,12 @@ export default async function handler(req) {
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
+  // CORS Preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  // Hanya izinkan POST
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
@@ -24,7 +26,7 @@ export default async function handler(req) {
     const body = await req.json();
     const { data } = body;
 
-    // Validasi input yang lebih ketat
+    // Validasi input
     if (!data || !Array.isArray(data) || data.length !== 4) {
       return new Response(
         JSON.stringify({
@@ -40,10 +42,10 @@ export default async function handler(req) {
       );
     }
 
-    // Validasi setiap nilai input
     const [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin] =
       data.map(Number);
 
+    // Validasi angka
     if (isNaN(umur_bulan) || umur_bulan < 0 || umur_bulan > 60) {
       return new Response(
         JSON.stringify({
@@ -96,7 +98,7 @@ export default async function handler(req) {
       );
     }
 
-    // Algoritma prediksi yang diperbaiki berdasarkan standar WHO
+    // Lakukan prediksi
     const prediction = calculateStuntingStatus(
       umur_bulan,
       berat_badan,
@@ -131,7 +133,7 @@ export default async function handler(req) {
     return new Response(
       JSON.stringify({
         error: "Server error",
-        message: "Terjadi kesalahan dalam memproses data. Silakan coba lagi.",
+        message: "Terjadi kesalahan dalam memproses data",
         details: error.message,
       }),
       {
