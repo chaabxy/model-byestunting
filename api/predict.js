@@ -1,6 +1,68 @@
+import * as tf from "@tensorflow/tfjs";
+
 export const config = {
   runtime: "edge",
 };
+
+// Cache untuk model yang sudah di-load
+let model = null;
+
+// Statistik dari training data untuk normalisasi (hardcoded dari training)
+const FEATURE_STATS = {
+  mean: [29.5, 12.8, 89.4, 0.5], // [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin]
+  std: [17.2, 4.1, 15.8, 0.5],
+};
+
+// Label mapping (sesuai dengan label encoder dari training)
+const LABEL_MAPPING = {
+  0: "normal",
+  1: "severely stunted",
+  2: "stunted",
+};
+
+async function loadModel() {
+  if (!model) {
+    try {
+      // Load model dari path yang benar
+      model = await tf.loadLayersModel("/tfjs_model/model.json");
+      console.log("Model loaded successfully");
+    } catch (error) {
+      console.error("Error loading model:", error);
+      throw new Error("Failed to load ML model");
+    }
+  }
+  return model;
+}
+
+function normalizeInput(data) {
+  // Normalisasi menggunakan StandardScaler (z-score normalization)
+  return data.map((value, index) => {
+    return (value - FEATURE_STATS.mean[index]) / FEATURE_STATS.std[index];
+  });
+}
+
+function getInterpretationAndRecommendation(prediction, z_score = null) {
+  const interpretations = {
+    normal: {
+      interpretation:
+        "Tinggi badan anak sesuai dengan umurnya berdasarkan prediksi model ML",
+      recommendation:
+        "Pertahankan pola makan bergizi dan aktivitas fisik yang baik",
+    },
+    stunted: {
+      interpretation: "Model memprediksi anak mengalami stunting ringan",
+      recommendation:
+        "Perbaiki asupan gizi, konsultasi dengan ahli gizi, dan pantau pertumbuhan secara rutin",
+    },
+    "severely stunted": {
+      interpretation: "Model memprediksi anak mengalami stunting berat",
+      recommendation:
+        "Segera konsultasi dengan dokter anak dan ahli gizi untuk penanganan intensif",
+    },
+  };
+
+  return interpretations[prediction] || interpretations["normal"];
+}
 
 export default async function handler(req) {
   const corsHeaders = {
@@ -59,7 +121,6 @@ export default async function handler(req) {
       );
     }
 
-    // Validasi jenis kelamin terlebih dahulu
     if (![0, 1].includes(jenis_kelamin)) {
       return new Response(
         JSON.stringify({
@@ -73,33 +134,12 @@ export default async function handler(req) {
       );
     }
 
-    // Validasi berat badan berdasarkan jenis kelamin
-    let minWeight, maxWeight, minHeight, maxHeight;
-
-    if (jenis_kelamin === 1) {
-      // Laki-laki
-      minWeight = 1.5;
-      maxWeight = 22.07;
-      minHeight = 41.02;
-      maxHeight = 127.0;
-    } else {
-      // Perempuan
-      minWeight = 1.5;
-      maxWeight = 21.42;
-      minHeight = 40.01;
-      maxHeight = 128.0;
-    }
-
-    if (
-      isNaN(berat_badan) ||
-      berat_badan < minWeight ||
-      berat_badan > maxWeight
-    ) {
-      const genderText = jenis_kelamin === 1 ? "laki-laki" : "perempuan";
+    // Validasi berat dan tinggi badan
+    if (isNaN(berat_badan) || berat_badan < 1 || berat_badan > 50) {
       return new Response(
         JSON.stringify({
           error: "Invalid weight",
-          message: `Berat badan untuk ${genderText} harus antara ${minWeight}-${maxWeight} kg`,
+          message: "Berat badan harus antara 1-50 kg",
         }),
         {
           status: 400,
@@ -108,16 +148,11 @@ export default async function handler(req) {
       );
     }
 
-    if (
-      isNaN(tinggi_badan) ||
-      tinggi_badan < minHeight ||
-      tinggi_badan > maxHeight
-    ) {
-      const genderText = jenis_kelamin === 1 ? "laki-laki" : "perempuan";
+    if (isNaN(tinggi_badan) || tinggi_badan < 40 || tinggi_badan > 150) {
       return new Response(
         JSON.stringify({
           error: "Invalid height",
-          message: `Tinggi badan untuk ${genderText} harus antara ${minHeight}-${maxHeight} cm`,
+          message: "Tinggi badan harus antara 40-150 cm",
         }),
         {
           status: 400,
@@ -126,29 +161,68 @@ export default async function handler(req) {
       );
     }
 
-    // Lakukan prediksi
-    const prediction = calculateStuntingStatus(
+    // Load model ML
+    const mlModel = await loadModel();
+
+    // Normalisasi input data
+    const normalizedData = normalizeInput([
       umur_bulan,
       berat_badan,
       tinggi_badan,
-      jenis_kelamin
+      jenis_kelamin,
+    ]);
+
+    // Buat tensor untuk prediksi
+    const inputTensor = tf.tensor2d([normalizedData], [1, 4]);
+
+    // Lakukan prediksi
+    const prediction = mlModel.predict(inputTensor);
+    const predictionData = await prediction.data();
+
+    // Cleanup tensors
+    inputTensor.dispose();
+    prediction.dispose();
+
+    // Konversi hasil prediksi
+    const probabilities = Array.from(predictionData);
+    const predictedClassIndex = probabilities.indexOf(
+      Math.max(...probabilities)
     );
+    const predictedClass = LABEL_MAPPING[predictedClassIndex];
+    const confidence = probabilities[predictedClassIndex];
+
+    // Get interpretation dan recommendation
+    const { interpretation, recommendation } =
+      getInterpretationAndRecommendation(predictedClass);
 
     return new Response(
       JSON.stringify({
         success: true,
-        prediction: prediction.status,
-        confidence: prediction.confidence,
-        probabilities: prediction.probabilities,
+        prediction: predictedClass,
+        confidence: confidence.toFixed(3),
+        probabilities: {
+          normal: probabilities[0].toFixed(3),
+          "severely stunted": probabilities[1].toFixed(3),
+          stunted: probabilities[2].toFixed(3),
+        },
         input: {
           umur_bulan: umur_bulan,
           berat_badan: berat_badan,
           tinggi_badan: tinggi_badan,
           jenis_kelamin: jenis_kelamin === 1 ? "Laki-laki" : "Perempuan",
         },
-        z_score: prediction.z_score,
-        interpretation: prediction.interpretation,
-        recommendation: prediction.recommendation,
+        model_info: {
+          type: "Neural Network",
+          framework: "TensorFlow.js",
+          features_used: [
+            "umur_bulan",
+            "berat_badan",
+            "tinggi_badan",
+            "jenis_kelamin",
+          ],
+        },
+        interpretation: interpretation,
+        recommendation: recommendation,
         timestamp: new Date().toISOString(),
       }),
       {
@@ -161,7 +235,7 @@ export default async function handler(req) {
     return new Response(
       JSON.stringify({
         error: "Server error",
-        message: "Terjadi kesalahan dalam memproses data",
+        message: "Terjadi kesalahan dalam memproses data dengan model ML",
         details: error.message,
       }),
       {
@@ -170,94 +244,4 @@ export default async function handler(req) {
       }
     );
   }
-}
-
-// Fungsi untuk menghitung status stunting berdasarkan WHO Growth Standards
-function calculateStuntingStatus(
-  umur_bulan,
-  berat_badan,
-  tinggi_badan,
-  jenis_kelamin
-) {
-  // Standar tinggi badan menurut umur (Height-for-Age) WHO
-  // Ini adalah approximation sederhana - dalam produksi gunakan tabel WHO lengkap
-
-  let expectedHeight, heightSD;
-
-  if (jenis_kelamin === 1) {
-    // Laki-laki
-    if (umur_bulan <= 24) {
-      expectedHeight = 49.9 + umur_bulan * 1.1; // Approximation untuk 0-24 bulan
-      heightSD = 2.5;
-    } else {
-      expectedHeight = 75 + (umur_bulan - 24) * 0.6; // Approximation untuk >24 bulan
-      heightSD = 3.0;
-    }
-  } else {
-    // Perempuan
-    if (umur_bulan <= 24) {
-      expectedHeight = 49.1 + umur_bulan * 1.05; // Approximation untuk 0-24 bulan
-      heightSD = 2.4;
-    } else {
-      expectedHeight = 74 + (umur_bulan - 24) * 0.55; // Approximation untuk >24 bulan
-      heightSD = 2.9;
-    }
-  }
-
-  // Hitung Z-score untuk Height-for-Age
-  const z_score = (tinggi_badan - expectedHeight) / heightSD;
-
-  let status, confidence, interpretation, recommendation;
-  let normalProb, stuntedProb, severelyStuntedProb;
-
-  // Klasifikasi berdasarkan WHO standards
-  if (z_score >= -1) {
-    status = "Normal";
-    confidence = "0.85";
-    normalProb = "0.85";
-    stuntedProb = "0.10";
-    severelyStuntedProb = "0.05";
-    interpretation = "Tinggi badan anak sesuai dengan umurnya";
-    recommendation =
-      "Pertahankan pola makan bergizi dan aktivitas fisik yang baik";
-  } else if (z_score >= -2) {
-    status = "Stunted";
-    confidence = "0.80";
-    normalProb = "0.15";
-    stuntedProb = "0.75";
-    severelyStuntedProb = "0.10";
-    interpretation = "Anak mengalami stunting ringan";
-    recommendation =
-      "Perbaiki asupan gizi, konsultasi dengan ahli gizi, dan pantau pertumbuhan secara rutin";
-  } else if (z_score >= -3) {
-    status = "Severely Stunted";
-    confidence = "0.90";
-    normalProb = "0.05";
-    stuntedProb = "0.15";
-    severelyStuntedProb = "0.80";
-    interpretation = "Anak mengalami stunting berat";
-    recommendation =
-      "Segera konsultasi dengan dokter anak dan ahli gizi untuk penanganan intensif";
-  } else {
-    status = "Severely Stunted";
-    confidence = "0.95";
-    normalProb = "0.02";
-    stuntedProb = "0.08";
-    severelyStuntedProb = "0.90";
-    interpretation = "Anak mengalami stunting sangat berat";
-    recommendation = "Perlu penanganan medis segera dan program gizi khusus";
-  }
-
-  return {
-    status,
-    confidence,
-    probabilities: {
-      normal: normalProb,
-      stunted: stuntedProb,
-      "severely stunted": severelyStuntedProb,
-    },
-    z_score: z_score.toFixed(2),
-    interpretation,
-    recommendation,
-  };
 }
