@@ -1,39 +1,49 @@
-import * as tf from "@tensorflow/tfjs-node"
-import { join } from "path"
+// Menggunakan dynamic import untuk mengurangi bundle size
+let tf = null
 
 // Cache untuk model yang sudah di-load
 let model = null
 
-// Statistik dari training data untuk normalisasi (hardcoded dari training)
+// Statistik dari training data untuk normalisasi
 const FEATURE_STATS = {
-  mean: [29.5, 12.8, 89.4, 0.5], // [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin]
+  mean: [29.5, 12.8, 89.4, 0.5],
   std: [17.2, 4.1, 15.8, 0.5],
 }
 
-// Label mapping (sesuai dengan label encoder dari training)
+// Label mapping
 const LABEL_MAPPING = {
   0: "normal",
   1: "severely stunted",
   2: "stunted",
 }
 
-async function loadModel() {
+async function initTensorFlow() {
+  if (!tf) {
+    // Dynamic import untuk mengurangi cold start
+    tf = await import("@tensorflow/tfjs")
+    // Set backend ke CPU untuk konsistensi
+    await tf.setBackend("cpu")
+  }
+  return tf
+}
+
+async function loadModel(baseUrl) {
   if (!model) {
     try {
-      // Load model dari path yang benar - untuk Node.js runtime
-      const modelPath = join(process.cwd(), "public", "tfjs_model", "model.json")
-      model = await tf.loadLayersModel(`file://${modelPath}`)
-      console.log("Model loaded successfully")
+      await initTensorFlow()
+      // Load model dari URL public
+      const modelUrl = `${baseUrl}/tfjs_model/model.json`
+      model = await tf.loadLayersModel(modelUrl)
+      console.log("Model loaded successfully from:", modelUrl)
     } catch (error) {
       console.error("Error loading model:", error)
-      throw new Error("Failed to load ML model")
+      throw new Error(`Failed to load ML model: ${error.message}`)
     }
   }
   return model
 }
 
 function normalizeInput(data) {
-  // Normalisasi menggunakan StandardScaler (z-score normalization)
   return data.map((value, index) => {
     return (value - FEATURE_STATS.mean[index]) / FEATURE_STATS.std[index]
   })
@@ -91,7 +101,7 @@ export default async function handler(req, res) {
 
     const [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin] = data.map(Number)
 
-    // Validasi angka
+    // Validasi input
     if (isNaN(umur_bulan) || umur_bulan < 0 || umur_bulan > 60) {
       return res.status(400).json({
         error: "Invalid age",
@@ -106,7 +116,6 @@ export default async function handler(req, res) {
       })
     }
 
-    // Validasi berat dan tinggi badan
     if (isNaN(berat_badan) || berat_badan < 1 || berat_badan > 50) {
       return res.status(400).json({
         error: "Invalid weight",
@@ -121,8 +130,13 @@ export default async function handler(req, res) {
       })
     }
 
+    // Get base URL untuk load model
+    const protocol = req.headers["x-forwarded-proto"] || "http"
+    const host = req.headers.host
+    const baseUrl = `${protocol}://${host}`
+
     // Load model ML
-    const mlModel = await loadModel()
+    const mlModel = await loadModel(baseUrl)
 
     // Normalisasi input data
     const normalizedData = normalizeInput([umur_bulan, berat_badan, tinggi_badan, jenis_kelamin])
@@ -164,7 +178,7 @@ export default async function handler(req, res) {
       },
       model_info: {
         type: "Neural Network",
-        framework: "TensorFlow.js",
+        framework: "TensorFlow.js Browser",
         features_used: ["umur_bulan", "berat_badan", "tinggi_badan", "jenis_kelamin"],
       },
       interpretation: interpretation,

@@ -21,6 +21,19 @@
           "value": "Content-Type, Authorization"
         }
       ]
+    },
+    {
+      "source": "/tfjs_model/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        }
+      ]
     }
   ]
 }

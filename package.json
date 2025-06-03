@@ -2,17 +2,15 @@
   "name": "stunting-prediction-api",
   "version": "1.0.0",
   "description": "API untuk prediksi stunting menggunakan model ML",
-  "main": "index.js",
+  "type": "module",
   "engines": {
     "node": "18.x"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "echo 'No build step required for serverless functions'",
-    "start": "next start"
+    "dev": "vercel dev",
+    "build": "echo 'No build step required for serverless functions'"
   },
   "dependencies": {
-    "@tensorflow/tfjs-node": "^4.17.0",
-    "next": "^14.1.0"
+    "@tensorflow/tfjs": "^4.17.0"
   }
 }
