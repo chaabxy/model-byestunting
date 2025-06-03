@@ -1,190 +1,127 @@
-// Dynamic import untuk TensorFlow.js
-let tf = null;
+import * as tf from "@tensorflow/tfjs";
+
+export const config = {
+  runtime: "edge",
+};
+
 let model = null;
 
-// Statistik normalisasi dari training data
-const FEATURE_STATS = {
-  mean: [29.5, 12.8, 89.4, 0.5],
-  std: [17.2, 4.1, 15.8, 0.5],
-};
-
-// Label mapping sesuai dengan training
-const LABEL_MAPPING = {
-  0: "normal",
-  1: "severely stunted",
-  2: "stunted",
-};
-
-async function initTensorFlow() {
-  if (!tf) {
-    tf = await import("@tensorflow/tfjs");
-    await tf.setBackend("cpu");
-    await tf.ready();
-  }
-  return tf;
-}
-
-async function loadModel(baseUrl) {
+// Load model sekali saja
+async function loadModel() {
   if (!model) {
     try {
-      await initTensorFlow();
-
-      // Coba beberapa URL alternatif
-      const modelUrls = [
-        `${baseUrl}/tfjs_model/model.json`,
-        `/tfjs_model/model.json`,
-        `./tfjs_model/model.json`,
-      ];
-
-      let lastError = null;
-
-      for (const modelUrl of modelUrls) {
-        try {
-          console.log("🔄 Mencoba memuat model dari:", modelUrl);
-
-          // Test akses ke URL terlebih dahulu
-          const response = await fetch(modelUrl, {
-            method: "HEAD",
-            headers: {
-              Accept: "application/json",
-            },
-          });
-
-          if (response.ok) {
-            console.log("✅ URL model dapat diakses:", modelUrl);
-            model = await tf.loadLayersModel(modelUrl);
-            console.log("✅ Model berhasil dimuat dari:", modelUrl);
-            return model;
-          } else {
-            console.log(
-              `❌ URL tidak dapat diakses (${response.status}):`,
-              modelUrl
-            );
-          }
-        } catch (error) {
-          console.log(`❌ Error dengan URL ${modelUrl}:`, error.message);
-          lastError = error;
-          continue;
-        }
-      }
-
-      throw new Error(
-        `Semua URL model gagal dimuat. Last error: ${lastError?.message}`
-      );
+      model = await tf.loadLayersModel("/tfjs_model/model.json");
+      console.log("Model berhasil dimuat");
     } catch (error) {
-      console.error("❌ Error loading model:", error);
-      throw new Error(`Gagal memuat model ML: ${error.message}`);
+      console.error("Error loading model:", error);
+      throw new Error("Gagal memuat model");
     }
   }
   return model;
 }
 
-function normalizeInput(data) {
-  return data.map((value, index) => {
-    return (value - FEATURE_STATS.mean[index]) / FEATURE_STATS.std[index];
-  });
-}
-
-function getInterpretationAndRecommendation(prediction) {
-  const interpretations = {
-    normal: {
-      interpretation:
-        "Tinggi badan anak sesuai dengan umurnya berdasarkan prediksi model ML",
-      recommendation:
-        "Pertahankan pola makan bergizi dan aktivitas fisik yang baik",
-    },
-    stunted: {
-      interpretation: "Model memprediksi anak mengalami stunting ringan",
-      recommendation:
-        "Perbaiki asupan gizi, konsultasi dengan ahli gizi, dan pantau pertumbuhan secara rutin",
-    },
-    "severely stunted": {
-      interpretation: "Model memprediksi anak mengalami stunting berat",
-      recommendation:
-        "Segera konsultasi dengan dokter anak dan ahli gizi untuk penanganan intensif",
-    },
+export default async function handler(req) {
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
   };
 
-  return interpretations[prediction] || interpretations["normal"];
-}
-
-export default async function handler(req, res) {
-  // Set CORS headers
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  // Handle CORS preflight
+  // CORS Preflight
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   // Hanya izinkan POST
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method not allowed",
-      message: "Hanya metode POST yang diizinkan",
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   try {
-    const { data } = req.body;
+    const body = await req.json();
+    const { data } = body;
 
     // Validasi input
     if (!data || !Array.isArray(data) || data.length !== 4) {
-      return res.status(400).json({
-        error: "Input tidak valid",
-        message:
-          'Diperlukan field "data" berupa array dengan 4 angka [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin]',
-        example: { data: [24, 10.5, 85.2, 1] },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Invalid input",
+          message:
+            'Expected "data" field with array of 4 numbers [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin]',
+          example: { data: [24, 10.5, 85.2, 1] },
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin] =
       data.map(Number);
 
-    // Validasi range input
+    // Validasi angka
     if (isNaN(umur_bulan) || umur_bulan < 0 || umur_bulan > 60) {
-      return res.status(400).json({
-        error: "Umur tidak valid",
-        message: "Umur harus antara 0-60 bulan",
-      });
-    }
-
-    if (![0, 1].includes(jenis_kelamin)) {
-      return res.status(400).json({
-        error: "Jenis kelamin tidak valid",
-        message: "Jenis kelamin harus 0 (perempuan) atau 1 (laki-laki)",
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Invalid age",
+          message: "Umur harus antara 0-60 bulan",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     if (isNaN(berat_badan) || berat_badan < 1 || berat_badan > 50) {
-      return res.status(400).json({
-        error: "Berat badan tidak valid",
-        message: "Berat badan harus antara 1-50 kg",
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Invalid weight",
+          message: "Berat badan harus antara 1-50 kg",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     if (isNaN(tinggi_badan) || tinggi_badan < 40 || tinggi_badan > 150) {
-      return res.status(400).json({
-        error: "Tinggi badan tidak valid",
-        message: "Tinggi badan harus antara 40-150 cm",
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Invalid height",
+          message: "Tinggi badan harus antara 40-150 cm",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
-    // Dapatkan base URL
-    const protocol = req.headers["x-forwarded-proto"] || "http";
-    const host = req.headers.host;
-    const baseUrl = `${protocol}://${host}`;
+    if (![0, 1].includes(jenis_kelamin)) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid gender",
+          message: "Jenis kelamin harus 0 (perempuan) atau 1 (laki-laki)",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
-    console.log("🔄 Memuat model ML...");
+    // Load model dan lakukan prediksi
+    const loadedModel = await loadModel();
 
-    // Load model
-    const mlModel = await loadModel(baseUrl);
-
-    console.log("🔄 Melakukan normalisasi data...");
-
-    // Normalisasi input
+    // Normalisasi data input (sesuai dengan preprocessing saat training)
+    // Catatan: Idealnya nilai mean dan std ini harus disimpan dari proses training
+    // Untuk sementara menggunakan estimasi berdasarkan data umum
     const normalizedData = normalizeInput([
       umur_bulan,
       berat_badan,
@@ -192,68 +129,124 @@ export default async function handler(req, res) {
       jenis_kelamin,
     ]);
 
-    console.log("🔄 Membuat prediksi...");
-
-    // Buat tensor dan lakukan prediksi
+    // Buat tensor dari data input
     const inputTensor = tf.tensor2d([normalizedData], [1, 4]);
-    const prediction = mlModel.predict(inputTensor);
+
+    // Lakukan prediksi
+    const prediction = loadedModel.predict(inputTensor);
     const predictionData = await prediction.data();
 
-    // Cleanup tensors
+    // Cleanup tensor
     inputTensor.dispose();
     prediction.dispose();
 
-    // Proses hasil prediksi
+    // Konversi hasil prediksi
     const probabilities = Array.from(predictionData);
-    const predictedClassIndex = probabilities.indexOf(
-      Math.max(...probabilities)
-    );
-    const predictedClass = LABEL_MAPPING[predictedClassIndex];
-    const confidence = probabilities[predictedClassIndex];
+    const predictedClass = probabilities.indexOf(Math.max(...probabilities));
 
-    // Dapatkan interpretasi dan rekomendasi
+    // Mapping kelas prediksi ke label
+    const classLabels = ["normal", "severely stunted", "stunted"];
+    const predictedLabel = classLabels[predictedClass];
+
+    // Hitung confidence
+    const confidence = Math.max(...probabilities);
+
+    // Buat interpretasi dan rekomendasi berdasarkan hasil prediksi model
     const { interpretation, recommendation } =
-      getInterpretationAndRecommendation(predictedClass);
+      getInterpretationAndRecommendation(predictedLabel, confidence);
 
-    console.log("✅ Prediksi berhasil:", predictedClass);
-
-    return res.status(200).json({
-      success: true,
-      prediction: predictedClass,
-      confidence: Number.parseFloat(confidence.toFixed(3)),
-      probabilities: {
-        normal: Number.parseFloat(probabilities[0].toFixed(3)),
-        "severely stunted": Number.parseFloat(probabilities[1].toFixed(3)),
-        stunted: Number.parseFloat(probabilities[2].toFixed(3)),
-      },
-      input: {
-        umur_bulan: umur_bulan,
-        berat_badan: berat_badan,
-        tinggi_badan: tinggi_badan,
-        jenis_kelamin: jenis_kelamin === 1 ? "Laki-laki" : "Perempuan",
-      },
-      model_info: {
-        type: "Neural Network",
-        framework: "TensorFlow.js",
-        features_used: [
-          "umur_bulan",
-          "berat_badan",
-          "tinggi_badan",
-          "jenis_kelamin",
-        ],
-        model_source: "tfjs_model/model.json",
-      },
-      interpretation: interpretation,
-      recommendation: recommendation,
-      timestamp: new Date().toISOString(),
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        prediction: predictedLabel,
+        confidence: confidence.toFixed(3),
+        probabilities: {
+          normal: probabilities[0].toFixed(3),
+          "severely stunted": probabilities[1].toFixed(3),
+          stunted: probabilities[2].toFixed(3),
+        },
+        input: {
+          umur_bulan: umur_bulan,
+          berat_badan: berat_badan,
+          tinggi_badan: tinggi_badan,
+          jenis_kelamin: jenis_kelamin === 1 ? "Laki-laki" : "Perempuan",
+        },
+        interpretation: interpretation,
+        recommendation: recommendation,
+        model_used: "TensorFlow.js Neural Network",
+        timestamp: new Date().toISOString(),
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   } catch (error) {
-    console.error("❌ Error dalam prediksi:", error);
-    return res.status(500).json({
-      error: "Server error",
-      message: "Terjadi kesalahan dalam memproses prediksi",
-      details: error.message,
-      timestamp: new Date().toISOString(),
-    });
+    console.error("Prediction error:", error);
+    return new Response(
+      JSON.stringify({
+        error: "Server error",
+        message: "Terjadi kesalahan dalam memproses data",
+        details: error.message,
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   }
+}
+
+// Fungsi normalisasi input (sesuai dengan StandardScaler yang digunakan saat training)
+function normalizeInput(data) {
+  // Nilai mean dan std ini harus sesuai dengan yang digunakan saat training
+  // Idealnya disimpan dari proses training, untuk sementara menggunakan estimasi
+  const means = [30, 12, 85, 0.5]; // estimasi mean untuk [umur, berat, tinggi, gender]
+  const stds = [15, 5, 15, 0.5]; // estimasi std untuk [umur, berat, tinggi, gender]
+
+  return data.map((value, index) => (value - means[index]) / stds[index]);
+}
+
+// Fungsi untuk memberikan interpretasi dan rekomendasi berdasarkan hasil prediksi model
+function getInterpretationAndRecommendation(predictedLabel, confidence) {
+  let interpretation, recommendation;
+
+  switch (predictedLabel) {
+    case "normal":
+      interpretation =
+        "Berdasarkan model AI, tinggi badan anak diprediksi normal sesuai dengan umurnya";
+      recommendation =
+        "Pertahankan pola makan bergizi seimbang dan aktivitas fisik yang baik. Lakukan pemeriksaan rutin untuk memantau pertumbuhan anak.";
+      break;
+
+    case "stunted":
+      interpretation =
+        "Berdasarkan model AI, anak diprediksi mengalami stunting (pendek)";
+      recommendation =
+        "Segera konsultasi dengan dokter anak atau ahli gizi. Perbaiki asupan gizi dengan makanan bergizi tinggi, terutama protein dan vitamin. Pantau pertumbuhan secara rutin.";
+      break;
+
+    case "severely stunted":
+      interpretation =
+        "Berdasarkan model AI, anak diprediksi mengalami stunting berat (sangat pendek)";
+      recommendation =
+        "SEGERA konsultasi dengan dokter anak dan ahli gizi untuk penanganan intensif. Diperlukan program gizi khusus dan pemantauan medis yang ketat.";
+      break;
+
+    default:
+      interpretation = "Hasil prediksi tidak dapat diinterpretasi";
+      recommendation =
+        "Konsultasi dengan tenaga kesehatan untuk evaluasi lebih lanjut";
+  }
+
+  // Tambahkan catatan confidence
+  if (confidence < 0.7) {
+    interpretation += ` (Catatan: Tingkat kepercayaan model rendah: ${(
+      confidence * 100
+    ).toFixed(1)}%)`;
+    recommendation +=
+      " Disarankan untuk melakukan pemeriksaan medis langsung untuk konfirmasi.";
+  }
+
+  return { interpretation, recommendation };
 }
