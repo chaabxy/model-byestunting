@@ -1,7 +1,12 @@
-export default function handler(req, res) {
-  const baseUrl = `${req.headers["x-forwarded-proto"] || "http"}://${req.headers.host}`
+// HAPUS config runtime
+// export const config = {
+//   runtime: "edge",  // ❌ HAPUS INI
+// };
 
-  res.status(200).json({
+export default function handler(req, res) {
+  const baseUrl = `https://${req.headers.host}`;
+
+  return res.status(200).json({
     message: "Stunting Prediction API",
     status: "running",
     version: "1.0.0",
@@ -17,8 +22,9 @@ export default function handler(req, res) {
         body: {
           data: [24, 10.5, 85.2, 1],
         },
-        description: "Array of [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin(1=laki-laki, 0=perempuan)]",
+        description:
+          "Array of [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin(1=laki-laki, 0=perempuan)]",
       },
     },
-  })
+  });
 }

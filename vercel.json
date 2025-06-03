@@ -1,14 +1,13 @@
 {
   "functions": {
     "api/predict.js": {
-      "runtime": "nodejs18.x",
       "maxDuration": 30
     },
     "api/health.js": {
-      "runtime": "nodejs18.x"
+      "maxDuration": 10
     },
     "api/index.js": {
-      "runtime": "nodejs18.x"
+      "maxDuration": 10
     }
   },
   "headers": [

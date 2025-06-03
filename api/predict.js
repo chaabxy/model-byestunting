@@ -1,10 +1,10 @@
 import * as tf from "@tensorflow/tfjs-node";
 
-// PENTING: Ganti ke nodejs runtime
-export const config = {
-  runtime: "nodejs",
-  maxDuration: 30,
-};
+// HAPUS config runtime - biarkan Vercel auto-detect
+// export const config = {
+//   runtime: "nodejs",  // ❌ HAPUS INI
+//   maxDuration: 30,
+// }
 
 let model = null;
 
@@ -12,7 +12,7 @@ let model = null;
 async function loadModel() {
   if (!model) {
     try {
-      // Path ke model di folder public atau gunakan URL absolut
+      // Path ke model di folder public
       const modelPath = process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}/tfjs_model/model.json`
         : "/tfjs_model/model.json";
@@ -94,7 +94,6 @@ export default async function handler(req, res) {
     const loadedModel = await loadModel();
 
     // Normalisasi data sesuai dengan training
-    // CATATAN: Nilai ini harus sesuai dengan StandardScaler saat training
     const normalizedData = normalizeInput([
       umur_bulan,
       berat_badan,
@@ -171,9 +170,6 @@ export default async function handler(req, res) {
 // Fungsi normalisasi yang HARUS sesuai dengan StandardScaler saat training
 function normalizeInput(data) {
   // PENTING: Nilai mean dan std ini harus PERSIS sama dengan saat training
-  // Idealnya disimpan dari proses training, untuk sementara menggunakan estimasi
-  // Anda bisa menyimpan nilai scaler dari training untuk akurasi maksimal
-
   const means = [30.5, 12.8, 87.2, 0.5]; // Estimasi mean dari dataset training
   const stds = [17.2, 4.8, 12.5, 0.5]; // Estimasi std dari dataset training
 
