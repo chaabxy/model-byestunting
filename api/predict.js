@@ -1,31 +1,11 @@
-import * as tf from "@tensorflow/tfjs-node";
-import { join } from "path";
-
-let model = null;
-
-async function loadModel() {
-  if (!model) {
-    try {
-      const modelPath = join(process.cwd(), "tfjs_model", "model.json");
-      model = await tf.loadLayersModel(`file://${modelPath}`);
-      console.log("Model loaded successfully");
-    } catch (error) {
-      console.error("Error loading model:", error);
-      throw error;
-    }
-  }
-  return model;
-}
-
 export default async function handler(req, res) {
-  // Set CORS headers
+  // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   if (req.method !== "POST") {
@@ -33,37 +13,42 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Import TensorFlow.js di dalam function untuk menghindari cold start issues
+    const tf = await import("@tensorflow/tfjs-node");
+    const path = await import("path");
+
     const { data } = req.body;
 
     if (!data || !Array.isArray(data)) {
       return res.status(400).json({
-        error: "Invalid input. Expected array of numbers in data field.",
+        error: "Invalid input",
+        message: "Expected 'data' field with array of numbers",
       });
     }
 
     // Load model
-    const loadedModel = await loadModel();
+    const modelPath = path.join(process.cwd(), "tfjs_model", "model.json");
+    const model = await tf.loadLayersModel(`file://${modelPath}`);
 
     // Make prediction
     const inputTensor = tf.tensor2d([data]);
-    const prediction = loadedModel.predict(inputTensor);
+    const prediction = model.predict(inputTensor);
     const result = await prediction.data();
 
-    // Clean up tensors
+    // Cleanup
     inputTensor.dispose();
     prediction.dispose();
+    model.dispose();
 
-    // Return prediction
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       prediction: Array.from(result),
       input: data,
-      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error("Prediction error:", error);
-    res.status(500).json({
-      error: "Internal server error",
+    return res.status(500).json({
+      error: "Server error",
       message: error.message,
     });
   }

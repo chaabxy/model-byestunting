@@ -1,7 +1,7 @@
 {
   "name": "stunting-prediction-api",
   "version": "1.0.0",
-  "description": "API untuk prediksi stunting menggunakan TensorFlow.js",
+  "description": "API untuk prediksi stunting",
   "main": "api/health.js",
   "scripts": {
     "build": "echo 'No build step required for serverless functions'"
