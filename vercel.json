@@ -53,7 +53,7 @@
       ]
     },
     {
-      "source": "/tfjs_model/*.bin",
+      "source": "/tfjs_model/group1-shard1of1.bin",
       "headers": [
         {
           "key": "Content-Type",
