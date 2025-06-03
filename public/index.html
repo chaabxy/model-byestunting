@@ -6,86 +6,165 @@
     <title>Stunting Prediction API</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
         }
         .container {
             background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin: 20px 0;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
         }
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
         label {
             display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
         }
         input, select {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
             box-sizing: border-box;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
         }
         button {
-            background-color: #007bff;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 12px 24px;
+            padding: 15px 30px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            transition: transform 0.2s;
         }
         button:hover {
-            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
         .result {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 5px;
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 10px;
             display: none;
         }
         .result.success {
-            background-color: #d4edda;
-            border: 1px solid #c3e6cb;
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            border: 2px solid #28a745;
             color: #155724;
         }
         .result.error {
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            border: 2px solid #dc3545;
             color: #721c24;
+        }
+        .result h3 {
+            margin-top: 0;
+            color: inherit;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .status-normal {
+            background-color: #28a745;
+            color: white;
+        }
+        .status-stunted {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        .status-severely {
+            background-color: #dc3545;
+            color: white;
+        }
+        .prob-list {
+            list-style: none;
+            padding: 0;
+        }
+        .prob-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🍼 Stunting Prediction API</h1>
-        <p>Masukkan data anak untuk memprediksi status gizi berdasarkan tinggi badan menurut umur.</p>
+        <p class="subtitle">Masukkan data anak untuk memprediksi status gizi berdasarkan tinggi badan menurut umur</p>
         
         <form id="predictionForm">
             <div class="form-group">
-                <label for="umur">Umur (bulan):</label>
-                <input type="number" id="umur" min="0" max="60" required>
+                <label for="umur">Umur (bulan): *</label>
+                <input type="number" id="umur" min="0" max="60" placeholder="Contoh: 24" required>
+                <small style="color: #666;">Rentang: 0-60 bulan</small>
             </div>
             
             <div class="form-group">
-                <label for="berat">Berat Badan (kg):</label>
-                <input type="number" id="berat" step="0.1" min="0" required>
+                <label for="berat">Berat Badan (kg): *</label>
+                <input type="number" id="berat" step="0.1" min="1" max="50" placeholder="Contoh: 10.5" required>
+                <small style="color: #666;">Rentang: 1-50 kg</small>
             </div>
             
             <div class="form-group">
-                <label for="tinggi">Tinggi Badan (cm):</label>
-                <input type="number" id="tinggi" step="0.1" min="0" required>
+                <label for="tinggi">Tinggi Badan (cm): *</label>
+                <input type="number" id="tinggi" step="0.1" min="40" max="150" placeholder="Contoh: 85.2" required>
+                <small style="color: #666;">Rentang: 40-150 cm</small>
             </div>
             
             <div class="form-group">
-                <label for="kelamin">Jenis Kelamin:</label>
+                <label for="kelamin">Jenis Kelamin: *</label>
                 <select id="kelamin" required>
                     <option value="">Pilih jenis kelamin</option>
                     <option value="1">Laki-laki</option>
@@ -93,8 +172,13 @@
                 </select>
             </div>
             
-            <button type="submit">🔍 Prediksi Status Gizi</button>
+            <button type="submit" id="submitBtn">🔍 Prediksi Status Gizi</button>
         </form>
+        
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Sedang memproses prediksi...</p>
+        </div>
         
         <div id="result" class="result"></div>
     </div>
@@ -109,7 +193,14 @@
             const kelamin = parseInt(document.getElementById('kelamin').value);
             
             const resultDiv = document.getElementById('result');
+            const loadingDiv = document.getElementById('loading');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // Reset dan show loading
             resultDiv.style.display = 'none';
+            loadingDiv.style.display = 'block';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Memproses...';
             
             try {
                 const response = await fetch('/api/predict', {
@@ -124,30 +215,61 @@
                 
                 const data = await response.json();
                 
+                loadingDiv.style.display = 'none';
+                
                 if (data.success) {
+                    const statusClass = data.prediction.toLowerCase().includes('severely') ? 'status-severely' : 
+                                       data.prediction.toLowerCase().includes('stunted') ? 'status-stunted' : 'status-normal';
+                    
                     resultDiv.className = 'result success';
                     resultDiv.innerHTML = `
-                        <h3>📊 Hasil Prediksi</h3>
-                        <p><strong>Status Gizi:</strong> ${data.prediction.toUpperCase()}</p>
+                        <h3>📊 Hasil Prediksi Stunting</h3>
+                        <div class="status-badge ${statusClass}">
+                            ${data.prediction.toUpperCase()}
+                        </div>
                         <p><strong>Confidence:</strong> ${(data.confidence * 100).toFixed(1)}%</p>
                         <p><strong>Z-Score:</strong> ${data.z_score}</p>
-                        <h4>Probabilitas:</h4>
-                        <ul>
-                            <li>Normal: ${(data.probabilities.normal * 100).toFixed(1)}%</li>
-                            <li>Stunted: ${(data.probabilities.stunted * 100).toFixed(1)}%</li>
-                            <li>Severely Stunted: ${(data.probabilities['severely stunted'] * 100).toFixed(1)}%</li>
+                        
+                        <h4>📈 Probabilitas:</h4>
+                        <ul class="prob-list">
+                            <li><strong>Normal:</strong> ${(data.probabilities.normal * 100).toFixed(1)}%</li>
+                            <li><strong>Stunted:</strong> ${(data.probabilities.stunted * 100).toFixed(1)}%</li>
+                            <li><strong>Severely Stunted:</strong> ${(data.probabilities['severely stunted'] * 100).toFixed(1)}%</li>
                         </ul>
-                        <p><em>${data.note}</em></p>
+                        
+                        <h4>💡 Interpretasi:</h4>
+                        <p>${data.interpretation}</p>
+                        
+                        <h4>🎯 Rekomendasi:</h4>
+                        <p>${data.recommendation}</p>
+                        
+                        <hr style="margin: 20px 0;">
+                        <small><strong>Data Input:</strong> Umur: ${data.input.umur_bulan} bulan, 
+                        Berat: ${data.input.berat_badan} kg, 
+                        Tinggi: ${data.input.tinggi_badan} cm, 
+                        Jenis Kelamin: ${data.input.jenis_kelamin}</small>
                     `;
                 } else {
                     resultDiv.className = 'result error';
-                    resultDiv.innerHTML = `<p><strong>Error:</strong> ${data.message}</p>`;
+                    resultDiv.innerHTML = `
+                        <h3>❌ Error</h3>
+                        <p><strong>Pesan:</strong> ${data.message}</p>
+                        ${data.details ? `<p><strong>Detail:</strong> ${data.details}</p>` : ''}
+                    `;
                 }
             } catch (error) {
+                loadingDiv.style.display = 'none';
                 resultDiv.className = 'result error';
-                resultDiv.innerHTML = `<p><strong>Error:</strong> ${error.message}</p>`;
+                resultDiv.innerHTML = `
+                    <h3>❌ Error Koneksi</h3>
+                    <p><strong>Pesan:</strong> Gagal terhubung ke server. Silakan coba lagi.</p>
+                    <p><strong>Detail:</strong> ${error.message}</p>
+                `;
             }
             
+            // Reset button
+            submitBtn.disabled = false;
+            submitBtn.textContent = '🔍 Prediksi Status Gizi';
             resultDiv.style.display = 'block';
         });
     </script>

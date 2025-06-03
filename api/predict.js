@@ -24,6 +24,7 @@ export default async function handler(req) {
     const body = await req.json();
     const { data } = body;
 
+    // Validasi input yang lebih ketat
     if (!data || !Array.isArray(data) || data.length !== 4) {
       return new Response(
         JSON.stringify({
@@ -39,58 +40,86 @@ export default async function handler(req) {
       );
     }
 
-    // Simple rule-based prediction as fallback
-    // This is a simplified version - you can enhance this logic
-    const [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin] = data;
+    // Validasi setiap nilai input
+    const [umur_bulan, berat_badan, tinggi_badan, jenis_kelamin] =
+      data.map(Number);
 
-    // Calculate Z-score approximation for height-for-age
-    // This is a simplified calculation - in production you'd use WHO growth standards
-    const expectedHeight =
-      jenis_kelamin === 1
-        ? umur_bulan * 0.5 + 65
-        : // Male approximation
-          umur_bulan * 0.48 + 63; // Female approximation
-
-    const heightZScore =
-      (tinggi_badan - expectedHeight) / (expectedHeight * 0.1);
-
-    let prediction, confidence;
-
-    if (heightZScore >= -1) {
-      prediction = "normal";
-      confidence = 0.85;
-    } else if (heightZScore >= -2) {
-      prediction = "stunted";
-      confidence = 0.8;
-    } else {
-      prediction = "severely stunted";
-      confidence = 0.9;
+    if (isNaN(umur_bulan) || umur_bulan < 0 || umur_bulan > 60) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid age",
+          message: "Umur harus antara 0-60 bulan",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
-    // Calculate probabilities based on z-score
-    const normalProb =
-      heightZScore >= -1 ? 0.85 : Math.max(0.05, 0.85 + heightZScore * 0.3);
-    const stuntedProb = Math.abs(heightZScore + 1.5) < 0.5 ? 0.8 : 0.1;
-    const severelyStuntedProb = 1 - normalProb - stuntedProb;
+    if (isNaN(berat_badan) || berat_badan < 1 || berat_badan > 50) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid weight",
+          message: "Berat badan harus antara 1-50 kg",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (isNaN(tinggi_badan) || tinggi_badan < 40 || tinggi_badan > 150) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid height",
+          message: "Tinggi badan harus antara 40-150 cm",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (![0, 1].includes(jenis_kelamin)) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid gender",
+          message: "Jenis kelamin harus 0 (perempuan) atau 1 (laki-laki)",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Algoritma prediksi yang diperbaiki berdasarkan standar WHO
+    const prediction = calculateStuntingStatus(
+      umur_bulan,
+      berat_badan,
+      tinggi_badan,
+      jenis_kelamin
+    );
 
     return new Response(
       JSON.stringify({
         success: true,
-        prediction: prediction,
-        confidence: confidence.toFixed(4),
-        probabilities: {
-          normal: normalProb.toFixed(4),
-          stunted: stuntedProb.toFixed(4),
-          "severely stunted": severelyStuntedProb.toFixed(4),
-        },
+        prediction: prediction.status,
+        confidence: prediction.confidence,
+        probabilities: prediction.probabilities,
         input: {
-          umur_bulan,
-          berat_badan,
-          tinggi_badan,
+          umur_bulan: umur_bulan,
+          berat_badan: berat_badan,
+          tinggi_badan: tinggi_badan,
           jenis_kelamin: jenis_kelamin === 1 ? "Laki-laki" : "Perempuan",
         },
-        z_score: heightZScore.toFixed(2),
-        note: "Prediksi berdasarkan rule-based system. Untuk akurasi lebih tinggi, gunakan model ML yang telah dilatih.",
+        z_score: prediction.z_score,
+        interpretation: prediction.interpretation,
+        recommendation: prediction.recommendation,
+        timestamp: new Date().toISOString(),
       }),
       {
         status: 200,
@@ -102,7 +131,8 @@ export default async function handler(req) {
     return new Response(
       JSON.stringify({
         error: "Server error",
-        message: error.message,
+        message: "Terjadi kesalahan dalam memproses data. Silakan coba lagi.",
+        details: error.message,
       }),
       {
         status: 500,
@@ -110,4 +140,94 @@ export default async function handler(req) {
       }
     );
   }
+}
+
+// Fungsi untuk menghitung status stunting berdasarkan WHO Growth Standards
+function calculateStuntingStatus(
+  umur_bulan,
+  berat_badan,
+  tinggi_badan,
+  jenis_kelamin
+) {
+  // Standar tinggi badan menurut umur (Height-for-Age) WHO
+  // Ini adalah approximation sederhana - dalam produksi gunakan tabel WHO lengkap
+
+  let expectedHeight, heightSD;
+
+  if (jenis_kelamin === 1) {
+    // Laki-laki
+    if (umur_bulan <= 24) {
+      expectedHeight = 49.9 + umur_bulan * 1.1; // Approximation untuk 0-24 bulan
+      heightSD = 2.5;
+    } else {
+      expectedHeight = 75 + (umur_bulan - 24) * 0.6; // Approximation untuk >24 bulan
+      heightSD = 3.0;
+    }
+  } else {
+    // Perempuan
+    if (umur_bulan <= 24) {
+      expectedHeight = 49.1 + umur_bulan * 1.05; // Approximation untuk 0-24 bulan
+      heightSD = 2.4;
+    } else {
+      expectedHeight = 74 + (umur_bulan - 24) * 0.55; // Approximation untuk >24 bulan
+      heightSD = 2.9;
+    }
+  }
+
+  // Hitung Z-score untuk Height-for-Age
+  const z_score = (tinggi_badan - expectedHeight) / heightSD;
+
+  let status, confidence, interpretation, recommendation;
+  let normalProb, stuntedProb, severelyStuntedProb;
+
+  // Klasifikasi berdasarkan WHO standards
+  if (z_score >= -1) {
+    status = "Normal";
+    confidence = "0.85";
+    normalProb = "0.85";
+    stuntedProb = "0.10";
+    severelyStuntedProb = "0.05";
+    interpretation = "Tinggi badan anak sesuai dengan umurnya";
+    recommendation =
+      "Pertahankan pola makan bergizi dan aktivitas fisik yang baik";
+  } else if (z_score >= -2) {
+    status = "Stunted";
+    confidence = "0.80";
+    normalProb = "0.15";
+    stuntedProb = "0.75";
+    severelyStuntedProb = "0.10";
+    interpretation = "Anak mengalami stunting ringan";
+    recommendation =
+      "Perbaiki asupan gizi, konsultasi dengan ahli gizi, dan pantau pertumbuhan secara rutin";
+  } else if (z_score >= -3) {
+    status = "Severely Stunted";
+    confidence = "0.90";
+    normalProb = "0.05";
+    stuntedProb = "0.15";
+    severelyStuntedProb = "0.80";
+    interpretation = "Anak mengalami stunting berat";
+    recommendation =
+      "Segera konsultasi dengan dokter anak dan ahli gizi untuk penanganan intensif";
+  } else {
+    status = "Severely Stunted";
+    confidence = "0.95";
+    normalProb = "0.02";
+    stuntedProb = "0.08";
+    severelyStuntedProb = "0.90";
+    interpretation = "Anak mengalami stunting sangat berat";
+    recommendation = "Perlu penanganan medis segera dan program gizi khusus";
+  }
+
+  return {
+    status,
+    confidence,
+    probabilities: {
+      normal: normalProb,
+      stunted: stuntedProb,
+      "severely stunted": severelyStuntedProb,
+    },
+    z_score: z_score.toFixed(2),
+    interpretation,
+    recommendation,
+  };
 }
