@@ -1,0 +1,16 @@
+{
+  "name": "stunting-prediction-api",
+  "version": "1.0.0",
+  "description": "API untuk prediksi stunting menggunakan TensorFlow.js",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'Build complete'"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-node": "^4.15.0"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
