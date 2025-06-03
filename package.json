@@ -1,24 +1,17 @@
 {
   "name": "stunting-prediction-api",
   "version": "1.0.0",
-  "description": "API prediksi stunting menggunakan TensorFlow.js Lite",
+  "description": "API prediksi stunting menggunakan TensorFlow.js",
   "main": "index.js",
-  "type": "module",
   "scripts": {
-    "build": "echo 'No build step required for serverless functions'"
-  },
-  "engines": {
-    "node": "18.x"
+    "dev": "vercel dev",
+    "build": "echo 'Build complete'",
+    "start": "vercel dev"
   },
   "dependencies": {
-    "@tensorflow/tfjs": "^4.15.0"
+    "@tensorflow/tfjs-node": "^4.15.0"
   },
-  "keywords": [
-    "tensorflow",
-    "stunting",
-    "prediction",
-    "api"
-  ],
-  "author": "Your Name",
-  "license": "MIT"
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }
