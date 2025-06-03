@@ -1,7 +1,7 @@
-import * as tf from "@tensorflow/tfjs";
+import * as tf from "@tensorflow/tfjs-node";
 
 export const config = {
-  runtime: "edge",
+  runtime: "nodejs", // Ganti dari "edge" ke "nodejs"
 };
 
 let model = null;
