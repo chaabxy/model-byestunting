@@ -59,37 +59,65 @@ export default async function handler(req) {
       );
     }
 
-    if (isNaN(berat_badan) || berat_badan < 1 || berat_badan > 50) {
-      return new Response(
-        JSON.stringify({
-          error: "Invalid weight",
-          message: "Berat badan harus antara 1-50 kg",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    if (isNaN(tinggi_badan) || tinggi_badan < 40 || tinggi_badan > 150) {
-      return new Response(
-        JSON.stringify({
-          error: "Invalid height",
-          message: "Tinggi badan harus antara 40-150 cm",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
+    // Validasi jenis kelamin terlebih dahulu
     if (![0, 1].includes(jenis_kelamin)) {
       return new Response(
         JSON.stringify({
           error: "Invalid gender",
           message: "Jenis kelamin harus 0 (perempuan) atau 1 (laki-laki)",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Validasi berat badan berdasarkan jenis kelamin
+    let minWeight, maxWeight, minHeight, maxHeight;
+
+    if (jenis_kelamin === 1) {
+      // Laki-laki
+      minWeight = 1.5;
+      maxWeight = 22.07;
+      minHeight = 41.02;
+      maxHeight = 127.0;
+    } else {
+      // Perempuan
+      minWeight = 1.5;
+      maxWeight = 21.42;
+      minHeight = 40.01;
+      maxHeight = 128.0;
+    }
+
+    if (
+      isNaN(berat_badan) ||
+      berat_badan < minWeight ||
+      berat_badan > maxWeight
+    ) {
+      const genderText = jenis_kelamin === 1 ? "laki-laki" : "perempuan";
+      return new Response(
+        JSON.stringify({
+          error: "Invalid weight",
+          message: `Berat badan untuk ${genderText} harus antara ${minWeight}-${maxWeight} kg`,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (
+      isNaN(tinggi_badan) ||
+      tinggi_badan < minHeight ||
+      tinggi_badan > maxHeight
+    ) {
+      const genderText = jenis_kelamin === 1 ? "laki-laki" : "perempuan";
+      return new Response(
+        JSON.stringify({
+          error: "Invalid height",
+          message: `Tinggi badan untuk ${genderText} harus antara ${minHeight}-${maxHeight} cm`,
         }),
         {
           status: 400,
