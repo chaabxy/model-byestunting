@@ -1,18 +1,17 @@
 {
   "name": "stunting-prediction-api",
   "version": "1.0.0",
-  "description": "API prediksi stunting menggunakan TensorFlow.js",
+  "description": "API prediksi stunting menggunakan TensorFlow.js Lite",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "build": "echo 'No build step required for serverless functions'",
-    "start": "node api/index.js"
+    "build": "echo 'No build step required for serverless functions'"
   },
   "engines": {
     "node": "18.x"
   },
   "dependencies": {
-    "@tensorflow/tfjs": "^4.15.0",
-    "@tensorflow/tfjs-node": "^4.15.0"
+    "@tensorflow/tfjs": "^4.15.0"
   },
   "keywords": [
     "tensorflow",
